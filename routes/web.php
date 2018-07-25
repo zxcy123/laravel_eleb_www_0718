@@ -11,6 +11,12 @@
 |
 */
 
-Route::get('/', function () {
-    return view('welcome');
-});
+//Route::get('/', function () {
+//    return view('welcome');
+//});
+
+////////////////////////////////////
+/// 获取商家列表API
+Route::get('/businesslist','\App\Http\Controllers\ApiController@businesslist');
+Route::get('/business','\App\Http\Controllers\ApiController@business');
+Route::get('/regist','\App\Http\Controllers\ApiController@regist');
