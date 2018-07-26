@@ -19,4 +19,9 @@
 /// 获取商家列表API
 Route::get('/businesslist','\App\Http\Controllers\ApiController@businesslist');
 Route::get('/business','\App\Http\Controllers\ApiController@business');
-Route::get('/regist','\App\Http\Controllers\ApiController@regist');
+Route::post('/regist/','\App\Http\Controllers\ApiController@regist');
+Route::post('/logincheck','\App\Http\Controllers\ApiController@logincheck');
+Route::get('/sms','\App\Http\Controllers\ApiController@sms');
+Route::get('/changepassword','\App\Http\Controllers\ApiController@changepassword');
+Route::get('/addresslist','\App\Http\Controllers\ApiController@addresslist');
+Route::post('/addaddress','\App\Http\Controllers\ApiController@addaddress');
