@@ -25,3 +25,8 @@ Route::get('/sms','\App\Http\Controllers\ApiController@sms');
 Route::get('/changepassword','\App\Http\Controllers\ApiController@changepassword');
 Route::get('/addresslist','\App\Http\Controllers\ApiController@addresslist');
 Route::post('/addaddress','\App\Http\Controllers\ApiController@addaddress');
+Route::post('/editaddress','\App\Http\Controllers\ApiController@editaddress');
+Route::get('/address','\App\Http\Controllers\ApiController@address');
+Route::post('/addcart','\App\Http\Controllers\ApiController@addcart');
+Route::get('/cart','\App\Http\Controllers\ApiController@cart');
+Route::get('/addorder','\App\Http\Controllers\ApiController@addorder');

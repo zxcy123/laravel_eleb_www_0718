@@ -6,7 +6,10 @@ use App\Model\Address;
 use App\Model\Member;
 use App\Model\Menu;
 use App\Model\MenuCategory;
+use App\Model\Order;
+use App\Model\OrderGoods;
 use App\Model\Shop;
+use App\Model\ShoppingCart;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -32,11 +35,10 @@ class ApiController extends Controller
         //根据商户id查询该商户的菜品分类
         $business=DB::table('shops')->where('id',$request->id)->get();
         $menucategory=DB::table('menu_categories')->where('shop_id',$request->id)->get();
-//        dump($menucategory);
         for($i=0;$i<count($menucategory);++$i) {
             //根据菜品分类查询该分类下的菜品,并循环插入goods_list里
             $menu = DB::table('menus')->where('category_id', $menucategory[$i]->id)->get();
-            for ($j = 0; $j < count($menucategory); ++$j) {
+            for ($j = 0; $j < count($menu); ++$j) {
                 $menucategory[$i]->goods_list[$j]=[
                     "goods_id"=> $menu[$j]->id,
                     "goods_name"=> $menu[$j]->goods_name,
@@ -57,6 +59,7 @@ class ApiController extends Controller
                 ];
             }
         }
+//        return $menucategory;
         //将假数据和菜品分类及其下属菜品一起加入$business变量
         for($i=0;$i<count($business);++$i){
             $business[$i]->distance=8000;
@@ -113,10 +116,9 @@ class ApiController extends Controller
             $business[$i]->commodity=$menucategory;
         }
 
-//        return(substr(json_encode($business),1));
+
+
         return substr(substr(json_encode($business),1),0,-1);
-//        return substr(substr(json_encode($business),0,1),-1,1);
-//        return substr(substr(json_encode($business),0,1),-1,1);
     }
     
     //获取注册
@@ -257,9 +259,11 @@ class ApiController extends Controller
     {
         return json_encode(Address::all()->where('user_id',Auth::user()->id));
     }
+
+    //添加收货地址
     public function addaddress(Request $request)
     {
-        Validator::make($request->all(),[
+        $validator=Validator::make($request->all(),[
             "name"=>"required",
             "tel"=>"required",
             "provence"=>"required",
@@ -274,14 +278,198 @@ class ApiController extends Controller
             'area.required'=>"区不能为空",
             'detail_address.required'=>"详细地址不能为空"
         ]);
-
-//        return json_encode(Address::all()->where('user_id',Auth::user()->id));
+        if ($validator->fails()){
+            return [
+                "status"=> "false",
+                "message"=> $validator->errors()->first()
+            ];
+        }
+        Address::create([
+            "user_id"=>Auth::user()->id,
+            "name"=>$request->name,
+            "tel"=>$request->tel,
+            "provence"=>$request->provence,
+            "city"=>$request->city,
+            "area"=>$request->area,
+            "detail_address"=>$request->detail_address,
+            'is_default'=>0
+        ]);
         return json_encode([
         "status"=>"true",
         "message"=>"添加成功"
         ]);
     }
+
+    //显示修改页面
+    public function address(Request $request)
+    {
+        return json_encode(Address::find($request->id));
+    }
+
+    //修改收货地址
+    public function editaddress(Request $request)
+    {
+        $validator=Validator::make($request->all(),[
+            "name"=>"required",
+            "tel"=>"required",
+            "provence"=>"required",
+            "city"=>"required",
+            "area"=>"required",
+            "detail_address"=>"required"
+        ],[
+            'name.required'=>"收货人不能为空",
+            'tel.required'=>"联系方式不能为空",
+            'provence.required'=>"省不能为空",
+            'city.required'=>"市不能为空",
+            'area.required'=>"区不能为空",
+            'detail_address.required'=>"详细地址不能为空"
+        ]);
+        if ($validator->fails()){
+            return [
+                "status"=> "false",
+                "message"=> $validator->errors()->first()
+            ];
+        }
+        $status=Address::where('id',$request->id)->update([
+            "user_id"=>Auth::user()->id,
+            "name"=>$request->name,
+            "tel"=>$request->tel,
+            "provence"=>$request->provence,
+            "city"=>$request->city,
+            "area"=>$request->area,
+            "detail_address"=>$request->detail_address,
+            'is_default'=>0
+        ]);
+        if ($status){
+            return json_encode([
+                "status"=>"true",
+                "message"=>"修改成功"
+            ]);
+        }
+        return json_encode([
+            "status"=>"false",
+            "message"=>"修改失败"
+        ]);
+    }
     
+    //获取购物车数据接口
+    public function cart()
+    {
+        static $totalCost=0;
+        $goods_lists=ShoppingCart::select('goods_id','amount')->where('user_id',Auth::user()->id)->get();
+        foreach ($goods_lists as $goods_list){
+            $goods=Menu::select('goods_name','goods_img','goods_price')->where('id',$goods_list->goods_id)->get();
+            $goods_list->goods_name=$goods[0]->goods_name;
+            $goods_list->goods_img=$goods[0]->goods_img;
+            $goods_list->goods_price=$goods[0]->goods_price;
+            $totalCost+=(int)$goods[0]->goods_price*(int)$goods_list->amount;
+        }
+        $carts=["goods_list"=>$goods_lists,"totalCost"=>$totalCost];
+        return json_encode($carts);
+    }
+
+    //保存购物车接口
+    public function addcart(Request $request)
+    {
+        DB::table('shopping_carts')->where("user_id",Auth::user()->id)->delete();
+        $validator=Validator::make($request->all(),[
+            "goodsList"=>"required",
+            "goodsCount"=>"required"
+        ],[
+            'goodsList.required'=>"商品列表不能为空",
+            'goodsCount.required'=>"商品数量不能为空"
+        ]);
+        if ($validator->fails()){
+            return [
+                "status"=> "false",
+                "message"=> $validator->errors()->first()
+            ];
+        }
+        for ($i=0;$i<count($request->goodsList);++$i){
+            ShoppingCart::create([
+            "user_id"=>Auth::user()->id,
+            "goods_id"=>$request->goodsList[$i],
+            "amount"=>$request->goodsCount[$i],
+            ]);
+        }
+        return json_encode([
+            "status"=>"true",
+            "message"=>"添加成功"
+        ]);
+
+    }
+
+    // 添加订单接口
+    public function addorder(Request $request)
+    {
+        /**
+         * address_id: 地址id
+         */
+        //根据地址id查询地址详情
+        $address = Address::find($request->address_id);
+        //根据用户id查询购物车表中的goods_id,从而查询店铺id
+        $goods_id=ShoppingCart::select('goods_id')->where('user_id',Auth::user()->id);
+        $shop_id=Menu::select('shop_id')->where('id',$goods_id->first()->goods_id);
+        $total=0;
+        $ordergoodsstatus=true;
+        foreach ($goods_id as $amount){
+            $shop_id=Menu::select('goods_price')->where('id',$amount->goods_id);
+            $total+=$goods_id->amount*$shop_id->goods_price;
+        }
+        //开启事务
+        DB::beginTransaction();
+        try {
+            $order = Order::create([
+                'user_id' => $address->shop_category_id,
+                'shop_id' =>$shop_id->first()->shop_id,
+                'sn'=>date("YmdHis").rand(1000,9999),
+                'province' =>$address->province,
+                'city' =>$address->city,
+                'area' =>$address->area,
+                'detail_address' =>$address->detail_address,
+                'tel' =>$address->tel,
+                'name' =>$address->name,
+                'total' =>$total,
+                'status' => $request->start_send,
+                'out_trade_no' => rand(1000,9999)
+            ]);
+            foreach (ShoppingCart::select('goods_id')->where('user_id',Auth::user()->id)){
+                $ordergoods = OrderGoods::create([
+                    'order_id' => $order->id,
+                    'goods_id' => $request->email,
+                    'amount' => bcrypt($request->name),
+                    'goods_name'=>$id->id,
+                    'goods_img' => 0,
+                    'goods_price' => 0
+                ]);
+                if($ordergoods==false){
+                    $ordergoodsstatus=false;
+                }
+            }
+            if ($order && $ordergoodsstatus) {
+                DB::commit();
+                return [
+                    "status" => "true",
+                    "message" => "添加成功",
+                    "order_id" => $order->id
+                ];
+            }
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return [
+                "status" => "false",
+                "message" => "添加失败"
+            ];
+        }
+    }
+//////////////////////////////改测试数据////////////////////////////改测试数据////////////////////////////改测试数据
+//////////////////////////////改测试数据////////////////////////////改测试数据////////////////////////////改测试数据
+//////////////////////////////改测试数据////////////////////////////改测试数据////////////////////////////改测试数据
+//////////////////////////////改测试数据////////////////////////////改测试数据////////////////////////////改测试数据
+//////////////////////////////改测试数据////////////////////////////改测试数据////////////////////////////改测试数据
+//
+//    }
+
     //修改密码
     public function changepassword()
     {
