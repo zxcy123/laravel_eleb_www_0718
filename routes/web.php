@@ -29,4 +29,6 @@ Route::post('/editaddress','\App\Http\Controllers\ApiController@editaddress');
 Route::get('/address','\App\Http\Controllers\ApiController@address');
 Route::post('/addcart','\App\Http\Controllers\ApiController@addcart');
 Route::get('/cart','\App\Http\Controllers\ApiController@cart');
-Route::get('/addorder','\App\Http\Controllers\ApiController@addorder');
+Route::post('/addorder','\App\Http\Controllers\ApiController@addorder');
+Route::get('/order','\App\Http\Controllers\ApiController@order');
+Route::get('/orderlist','\App\Http\Controllers\ApiController@orderlist');

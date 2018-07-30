@@ -402,45 +402,60 @@ class ApiController extends Controller
     // 添加订单接口
     public function addorder(Request $request)
     {
+        $validator=Validator::make($request->all(),[
+            "address_id"=>"required"
+        ],[
+            'address_id.required'=>"地址不能为空不能为空"
+        ]);
+        if ($validator->fails()){
+            return [
+                "status"=> "false",
+                "message"=> $validator->errors()->first()
+            ];
+        }
         /**
          * address_id: 地址id
          */
         //根据地址id查询地址详情
         $address = Address::find($request->address_id);
         //根据用户id查询购物车表中的goods_id,从而查询店铺id
-        $goods_id=ShoppingCart::select('goods_id')->where('user_id',Auth::user()->id);
-        $shop_id=Menu::select('shop_id')->where('id',$goods_id->first()->goods_id);
+        $shoppingcart=ShoppingCart::select('goods_id')->where('user_id',Auth::user()->id);
+//        dd($carts);
+        $goods=Menu::select('shop_id')->where('id',$shoppingcart->first()->goods_id);
+        $carts=ShoppingCart::all()->where('user_id',Auth::user()->id);
         $total=0;
         $ordergoodsstatus=true;
-        foreach ($goods_id as $amount){
-            $shop_id=Menu::select('goods_price')->where('id',$amount->goods_id);
-            $total+=$goods_id->amount*$shop_id->goods_price;
+        foreach ($shoppingcart as $cart){
+            $goods=Menu::select('goods_price')->where('id',$cart->goods_id);
+            $total+=$shoppingcart->amount*$goods->goods_price;
         }
         //开启事务
         DB::beginTransaction();
         try {
             $order = Order::create([
-                'user_id' => $address->shop_category_id,
-                'shop_id' =>$shop_id->first()->shop_id,
+                'user_id' => Auth::user()->id,
+                'shop_id' =>$goods->first()->shop_id,
                 'sn'=>date("YmdHis").rand(1000,9999),
-                'province' =>$address->province,
+                'province' =>$address->provence,
                 'city' =>$address->city,
                 'area' =>$address->area,
                 'detail_address' =>$address->detail_address,
                 'tel' =>$address->tel,
                 'name' =>$address->name,
                 'total' =>$total,
-                'status' => $request->start_send,
+                'status' => 0,
                 'out_trade_no' => rand(1000,9999)
             ]);
-            foreach (ShoppingCart::select('goods_id')->where('user_id',Auth::user()->id)){
+            foreach ($carts as $cartgoods){
+                $goods=Menu::find($cartgoods->goods_id);
+//                dd();
                 $ordergoods = OrderGoods::create([
                     'order_id' => $order->id,
-                    'goods_id' => $request->email,
-                    'amount' => bcrypt($request->name),
-                    'goods_name'=>$id->id,
-                    'goods_img' => 0,
-                    'goods_price' => 0
+                    'goods_id' => $cartgoods->goods_id,
+                    'amount' => $cartgoods->amount,
+                    'goods_name'=>$goods->goods_name,
+                    'goods_img' => $goods->goods_img,
+                    'goods_price' => $goods->goods_price
                 ]);
                 if($ordergoods==false){
                     $ordergoodsstatus=false;
@@ -462,14 +477,89 @@ class ApiController extends Controller
             ];
         }
     }
-//////////////////////////////改测试数据////////////////////////////改测试数据////////////////////////////改测试数据
-//////////////////////////////改测试数据////////////////////////////改测试数据////////////////////////////改测试数据
-//////////////////////////////改测试数据////////////////////////////改测试数据////////////////////////////改测试数据
-//////////////////////////////改测试数据////////////////////////////改测试数据////////////////////////////改测试数据
-//////////////////////////////改测试数据////////////////////////////改测试数据////////////////////////////改测试数据
-//
-//    }
+    
+    //获取订单接口
+    public function order(Request $request)
+    {
+        $order=Order::select('shop_id','status',"detail_address")->where('user_id',Auth::user()->id)->first();
+        $shop=Shop::select('shop_name','shop_img')->where('id',$order->shop_id)->first();
+        $goods_list=DB::table('order_goods')->select("created_at","goods_id","goods_name","amount","goods_img","goods_price")->where('order_id',$request->id)->get();
+        $status=$order->status==0?"代付款":"已付款";
+        $order_price=0;
+        foreach ($goods_list as $goods){
+            $order_price+=$goods->goods_price;
+        }
 
+        return [
+            "id"=>$request->id,
+            "order_code"=>"0000001",
+            "order_birth_time"=>$goods_list[0]->created_at,
+            "order_status"=>$status,
+            "shop_id"=>$order->shop_id,
+            "shop_name"=>$shop->shop_name,
+            "shop_img"=>$shop->shop_img,
+            "shop_list"=>$goods_list,
+            "order_price"=>$order_price,
+            "order_address"=>$order->detail_address
+
+        ];
+    }
+
+    // 获得订单列表接口
+    public function orderlist()
+    {
+        $orders=Order::select('id','shop_id','status',"detail_address","created_at")->where('user_id',1)->get();
+        static $order_price=0;
+        $orderlist=[];
+        foreach ($orders as $key=>$order){
+            $status=$order->status==0?"代付款":"已付款";
+            $shop=Shop::select('shop_name','shop_img')->where('id',$order->shop_id)->first();
+            $goods_list=DB::table('order_goods')->select("goods_id","goods_name","amount","goods_img","goods_price")->where('order_id',$order->id)->get();
+
+            foreach ($goods_list as $goods){
+                $order_price+=$goods->goods_price;
+            }
+            $orderlist[$key]=[
+                "id"=>$order->id,
+                "order_code"=>"000000".$order->id,
+                "order_birth_time"=>$order->created_at->toArray()['formatted'],
+                "order_status"=>$status,
+                "shop_id"=>$order->shop_id,
+                "shop_name"=>$shop->shop_name,
+                "shop_img"=>$shop->shop_img,
+                "goods_list"=>$goods_list,
+                "order_price"=>$order_price,
+                "order_address"=>$order->detail_address
+            ];
+        }
+        return $orderlist;
+
+
+
+        /*
+        $orderlist=[];
+        foreach ($goods_lists as $key=>$goods_list){
+//            foreach ($goods_list as $goods){
+//                $order_price+=$goods->goods_price;
+//            }
+            $orderlist[$key]=$goods_list;
+        }
+        $status=$order->status==0?"代付款":"已付款";
+        $order_price=0;
+        $list=[
+            "id"=>$order->id,
+            "order_code"=>"0000001",
+            "order_birth_time"=>"2017-02-17 18:36",
+            "order_status"=>$status,
+            "shop_id"=>$order->shop_id,
+            "shop_name"=>$shop->shop_name,
+            "shop_img"=>$shop->shop_img,
+            "shop_list"=>$goods_list,
+            "order_price"=>$order_price,
+            "order_address"=>$order->detail_address
+        ];
+        return json_encode($list);*/
+    }
     //修改密码
     public function changepassword()
     {

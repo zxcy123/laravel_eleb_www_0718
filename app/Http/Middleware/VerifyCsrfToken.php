@@ -18,5 +18,6 @@ class VerifyCsrfToken extends Middleware
         "addaddress",
         "editaddress",
         "addcart",
+        "addorder",
     ];
 }
